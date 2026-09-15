@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Moodle → CSV</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    /* ===== Estilos (igual que v24) ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0a0c12;
+      color: #eef0f6;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .app-container { display: flex; flex-direction: column; height: 100vh; }
+    .top-bar {
+      background: #11141c;
+      border-bottom: 1px solid #2a2f3f;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .logo-area { padding: 0.8rem 0; }
+    .logo { font-size: 1.4rem; font-weight: 700; background: linear-gradient(135deg, #38bdf8, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .logo span { font-weight: 400; color: #eef0f6; background: none; }
+    .nav-tabs-horizontal { display: flex; gap: 0.5rem; background: #11141c; padding: 0.5rem 0; }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: #9ca3af;
+      border-radius: 40px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { background: #2d3348; color: #38bdf8; }
+    .tab-btn:hover:not(.active) { background: #1e2130; color: #eef0f6; }
+    .main-layout { display: flex; flex: 1; overflow: hidden; }
+    .courses-sidebar {
+      width: 320px;
+      background: #11141c;
+      border-right: 1px solid #2a2f3f;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+      transition: width 0.25s ease, opacity 0.25s ease;
+    }
+    .courses-sidebar.hidden { width: 0; opacity: 0; overflow: hidden; padding: 0; border: 0; }
+    .courses-header { padding: 1rem 1rem 0.5rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; }
+    .course-search { padding: 0 1rem 1rem; }
+    .course-search input { width: 100%; background: #1a1d2b; border: 1px solid #2d3348; border-radius: 40px; padding: 0.6rem 1rem; font-size: 0.8rem; color: #eef0f6; }
+    .course-list { list-style: none; padding: 0 0.75rem; flex: 1; overflow-y: auto; }
+    .course-item {
+      background: #1a1d2b;
+      border-radius: 12px;
+      padding: 0.6rem 0.75rem;
+      margin-bottom: 0.5rem;
+      border: 1px solid transparent;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .course-item.selected { border-color: #38bdf8; background: #1e2538; }
+    .course-info { flex: 1; overflow: hidden; }
+    .course-nrc { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 6px; }
+    .course-title { font-size: 0.7rem; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .delete-course-btn { background: none; border: none; color: #f87171; cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 20px; opacity: 0.7; }
+    .delete-course-btn:hover { opacity: 1; background: rgba(248,113,113,0.2); }
+    .level-badge { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .sidebar-footer { padding: 1rem; border-top: 1px solid #2a2f3f; background: #11141c; margin-top: auto; }
+    .sidebar-footer input { width: 100%; background: #1a1d2b; border: 1px solid #2d3348; border-radius: 12px; padding: 0.6rem 1rem; margin-bottom: 8px; font-size: 0.8rem; color: #eef0f6; }
+    .content-area { flex: 1; overflow-y: auto; padding: 1.5rem 2rem; transition: padding 0.25s ease; }
+    .content-area.full-width { padding: 1.5rem 2rem; }
+    .tab-pane { display: none; animation: fade 0.2s ease; }
+    .tab-pane.active-pane { display: block; }
+    .sub-tab-btn {
+      background: transparent;
+      border: none;
+      padding: 0.5rem 1.2rem;
+      font-weight: 500;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      border-radius: 40px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sub-tab-btn.active { background: #2d3348; color: #38bdf8; }
+    .sub-tab-btn:hover:not(.active) { background: #1e2130; color: #eef0f6; }
+    .sub-pane { display: none; animation: fade 0.2s ease; }
+    .sub-pane.active-subpane { display: block; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+    .card { background: #1a1d2b; border-radius: 20px; padding: 1.5rem; border: 1px solid #2d3348; margin-bottom: 1.5rem; }
+    .code-block { background: #0f1117; border: 1px solid #2d3348; border-radius: 16px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap; color: #d1d5db; }
+    button { background: #2d3348; border: none; padding: 0.5rem 1rem; border-radius: 40px; font-weight: 500; color: #eef0f6; cursor: pointer; }
+    button.primary { background: #38bdf8; color: #0a0c12; }
+    button.danger { background: rgba(248,113,113,0.2); color: #f87171; border: 1px solid #f87171; }
+    button.danger:hover { background: rgba(248,113,113,0.4); }
+    button.success { background: #4ade80; color: #0a0c12; }
+    input, textarea, select { background: #0f1117; border: 1px solid #2d3348; border-radius: 14px; padding: 0.7rem 1rem; color: #eef0f6; width: 100%; font-family: inherit; }
+    select option { background: #1a1d2b; color: #eef0f6; }
+    .grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: #1e2538; border-radius: 20px; padding: 1rem; text-align: center; }
+    .stat-card .num { font-size: 2rem; font-weight: 700; }
+    .stat-card .label { font-size: 0.7rem; color: #9ca3af; }
+    .table-wrapper { overflow-x: auto; margin-top: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 700px; }
+    th, td { padding: 0.8rem 0.5rem; border-bottom: 1px solid #2d3348; text-align: left; vertical-align: middle; }
+    th { color: #a78bfa; background: #11141c; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #1a1d2b; border-left: 4px solid; padding: 0.8rem 1.2rem; border-radius: 14px; z-index: 1000; font-size: 0.85rem; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+    .btn-group { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+    .badge-tipo { background: #2d3348; border-radius: 12px; padding: 0.2rem 0.5rem; font-size: 0.7rem; display: inline-block; }
+    .status-open { background: rgba(74,222,128,0.2); color: #4ade80; }
+    .status-closed { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+    .warning-box { background: rgba(251,191,36,0.1); border-left: 3px solid #fbbf24; padding: 0.8rem; margin: 1rem 0; }
+    .error-box { background: rgba(255,107,107,0.1); border-left: 3px solid #ff6b6b; padding: 0.8rem; margin: 1rem 0; }
+    .ok-box { background: rgba(74,222,128,0.1); border-left: 3px solid #4ade80; padding: 0.8rem; margin: 1rem 0; }
+    .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: #1a1d2b; border-radius: 20px; padding: 1.5rem; width: 90%; max-width: 650px; border: 1px solid #38bdf8; max-height: 80vh; overflow-y: auto; }
+    .category-row { background: rgba(56,189,248,0.08); }
+    .category-title { font-weight: 700; color: #38bdf8; }
+    .text-center { text-align: center; }
+    .esquema-table { min-width: 800px; }
+    .actividades-table { min-width: 900px; }
+    .empty-category { color: #fbbf24; font-style: italic; }
+    .format-badge { display: inline-block; background: #2d3348; padding: 0.2rem 0.8rem; border-radius: 40px; font-size: 0.75rem; margin-left: 8px; }
+    .nivel-badge { padding: 0.2rem 0.6rem; border-radius: 40px; font-size: 0.7rem; font-weight: 600; }
+    .nivel-badge.est { background: rgba(74,222,128,0.2); color: #4ade80; }
+    .nivel-badge.bas { background: rgba(251,191,36,0.2); color: #fbbf24; }
+    .nivel-badge.ini { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+    .nivel-badge.sin { background: #2d3348; color: #9ca3af; }
+    .status-correct { color: #4ade80; }
+    .status-warning { color: #fbbf24; }
+    .status-error { color: #ff6b6b; }
+    .chart-container { display: flex; gap: 2rem; flex-wrap: wrap; margin-top: 1rem; }
+    .chart-box { background: #1e2538; border-radius: 20px; padding: 1rem; flex: 1; min-width: 200px; }
+    .chart-box h4 { margin-bottom: 0.5rem; color: #9ca3af; font-weight: 400; }
+    canvas { width: 100% !important; height: auto !important; max-height: 200px; }
+    .level-indent-0 { padding-left: 0; }
+    .level-indent-1 { padding-left: 1.5rem; }
+    .level-indent-2 { padding-left: 3rem; }
+    .level-indent-3 { padding-left: 4.5rem; }
+    .level-indent-4 { padding-left: 6rem; }
+    .level-indent-5 { padding-left: 7.5rem; }
+    .activity-extra { background: rgba(251,191,36,0.05); }
+
+    /* ---- Estilos CSV (claro) ---- */
+    #csvPane {
+      background: #f5f3ef;
+      color: #1a1a2e;
+      padding: 0;
+      margin: -1.5rem -2rem;
+    }
+    #csvPane .csv-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 28px 100px;
+    }
+    #csvPane .csv-container * { color: #1a1a2e; }
+    #csvPane .csv-container .card {
+      background: #ffffff;
+      border: 1px solid #e2e0dc;
+      border-radius: 14px;
+      padding: 32px;
+      box-shadow: 0 1px 3px rgba(26,26,46,0.06);
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeUp 0.6s ease forwards;
+    }
+    #csvPane .csv-container .card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    #csvPane .csv-container .card-step {
+      width: 36px;
+      height: 36px;
+      background: #2563eb;
+      color: #fff;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    #csvPane .csv-container .card-title { font-size: 1.2rem; font-weight: 700; color: #1a1a2e; }
+    #csvPane .csv-container .card-subtitle { font-size: 0.82rem; font-weight: 500; color: #8888a0; margin-top: 2px; }
+    #csvPane .csv-container .form-grid { display: grid; grid-template-columns: 1fr 200px; gap: 14px; margin-bottom: 18px; }
+    #csvPane .csv-container .form-group label { display: block; font-size: 0.78rem; font-weight: 700; color: #4a4a68; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+    #csvPane .csv-container .form-group select,
+    #csvPane .csv-container .form-group input {
+      width: 100%;
+      padding: 14px 16px;
+      background: #ffffff;
+      border: 2px solid #e2e0dc;
+      border-radius: 10px;
+      color: #1a1a2e;
+      font-size: 0.88rem;
+      font-weight: 600;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    #csvPane .csv-container .form-group select option {
+      background: #ffffff !important;
+      color: #1a1a2e !important;
+    }
+    #csvPane .csv-container .form-group select:focus,
+    #csvPane .csv-container .form-group input:focus {
+      border-color: #2563eb;
+      background: #ffffff;
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+    }
+    #csvPane .csv-container .btn-primary {
+      background: #2563eb;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(37,99,235,0.3);
+    }
+    #csvPane .csv-container .btn-primary:hover {
+      background: #1d4ed8;
+      box-shadow: 0 4px 16px rgba(37,99,235,0.35);
+      transform: translateY(-1px);
+    }
+    #csvPane .csv-container .btn-big { width: 100%; padding: 18px 32px; font-size: 0.95rem; border-radius: 14px; }
+    #csvPane .csv-container .steps-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      background: #dbeafe;
+      border: 1px solid rgba(37,99,235,0.15);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #2563eb;
+      transition: all 0.2s ease;
+      width: 100%;
+      text-align: left;
+    }
+    #csvPane .csv-container .steps-toggle:hover { background: rgba(37,99,235,0.12); }
+    #csvPane .csv-container .steps-toggle .icon { font-size: 1.1rem; transition: transform 0.3s ease; }
+    #csvPane .csv-container .steps-toggle.open .icon { transform: rotate(180deg); }
+    #csvPane .csv-container .steps-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+    #csvPane .csv-container .steps-content.open { max-height: 500px; }
+    #csvPane .csv-container .steps-list {
+      padding: 18px 0 0 8px;
+      list-style: none;
+      counter-reset: step;
+    }
+    #csvPane .csv-container .steps-list li {
+      counter-increment: step;
+      position: relative;
+      padding: 12px 0 12px 44px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #4a4a68;
+      line-height: 1.6;
+      border-left: 2px solid #e2e0dc;
+      margin-left: 14px;
+    }
+    #csvPane .csv-container .steps-list li:last-child { border-left-color: transparent; }
+    #csvPane .csv-container .steps-list li::before {
+      content: counter(step);
+      position: absolute;
+      left: -12px;
+      top: 12px;
+      width: 22px;
+      height: 22px;
+      background: #2563eb;
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 800;
+    }
+    #csvPane .csv-container .steps-list li strong { color: #1a1a2e; font-weight: 700; }
+    #csvPane .csv-container .divider {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 36px 0;
+      opacity: 0;
+      animation: fadeUp 0.5s ease forwards;
+      animation-delay: 0.15s;
+    }
+    #csvPane .csv-container .divider-line { flex: 1; height: 1px; background: #e2e0dc; }
+    #csvPane .csv-container .divider-text { font-size: 0.75rem; font-weight: 700; color: #8888a0; text-transform: uppercase; letter-spacing: 0.12em; }
+    #csvPane .csv-container .drop-zone {
+      border: 2.5px dashed #e2e0dc;
+      border-radius: 14px;
+      padding: 56px 36px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background: #ffffff;
+      opacity: 0;
+      animation: fadeUp 0.6s ease forwards;
+      animation-delay: 0.2s;
+    }
+    #csvPane .csv-container .drop-zone:hover, #csvPane .csv-container .drop-zone.drag-over {
+      border-color: #2563eb;
+      background: #dbeafe;
+      box-shadow: 0 4px 12px rgba(26,26,46,0.08);
+    }
+    #csvPane .csv-container .drop-zone input[type="file"] { display: none; }
+    #csvPane .csv-container .drop-icon {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 18px;
+      background: #dbeafe;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      color: #2563eb;
+      transition: all 0.25s ease;
+    }
+    #csvPane .csv-container .drop-zone:hover .drop-icon {
+      background: #2563eb;
+      color: #fff;
+      transform: scale(1.05);
+    }
+    #csvPane .csv-container .drop-zone h2 { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+    #csvPane .csv-container .drop-zone span { font-size: 0.8rem; font-weight: 500; color: #8888a0; }
+    #csvPane .csv-container .file-info {
+      margin-top: 18px;
+      padding: 16px 20px;
+      background: #ffffff;
+      border: 1px solid #e2e0dc;
+      border-radius: 10px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      box-shadow: 0 1px 3px rgba(26,26,46,0.06);
+    }
+    #csvPane .csv-container .file-info.visible { display: flex; }
+    #csvPane .csv-container .file-meta { display: flex; align-items: center; gap: 14px; }
+    #csvPane .csv-container .file-badge {
+      background: #2563eb;
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 5px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    #csvPane .csv-container .file-name { font-size: 0.88rem; font-weight: 700; color: #1a1a2e; }
+    #csvPane .csv-container .file-rows { font-size: 0.78rem; font-weight: 500; color: #8888a0; margin-top: 2px; }
+    #csvPane .csv-container .file-remove {
+      width: 34px;
+      height: 34px;
+      background: #f5f3ef;
+      border: 1px solid #e2e0dc;
+      border-radius: 8px;
+      color: #8888a0;
+      cursor: pointer;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    #csvPane .csv-container .file-remove:hover { border-color: #dc2626; color: #dc2626; background: #fee2e2; }
+    #csvPane .csv-container .file-list-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #faf9f7; border: 1px solid #e2e0dc; border-radius: 8px; }
+    #csvPane .csv-container .file-list-item .file-meta-sm { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+    #csvPane .csv-container .file-list-item .file-name-sm { font-size: 0.82rem; font-weight: 700; color: #1a1a2e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+    #csvPane .csv-container .file-list-item .file-rows-sm { font-size: 0.72rem; color: #8888a0; margin-top: 1px; }
+    #csvPane .csv-container .file-remove-sm { width: 28px; height: 28px; background: #ffffff; border: 1px solid #e2e0dc; border-radius: 6px; color: #8888a0; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s ease; }
+    #csvPane .csv-container .file-remove-sm:hover { border-color: #dc2626; color: #dc2626; background: #fee2e2; }
+    #csvPane .csv-container .dedup-note { font-size: 0.78rem; font-weight: 600; color: #b45309; background: #fffbeb; border: 1px solid rgba(217,119,6,0.25); padding: 10px 14px; border-radius: 8px; }
+    #csvPane .csv-container .mapping-section { margin-top: 28px; }
+    #csvPane .csv-container .mapping-section h3 { font-size: 0.85rem; font-weight: 700; color: #4a4a68; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+    #csvPane .csv-container .mapping-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.82rem;
+      border: 1px solid #e2e0dc;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #csvPane .csv-container .mapping-table th {
+      text-align: left;
+      padding: 12px 16px;
+      background: #f5f3ef;
+      color: #8888a0;
+      font-weight: 700;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid #e2e0dc;
+    }
+    #csvPane .csv-container .mapping-table td {
+      padding: 11px 16px;
+      border-bottom: 1px solid #e2e0dc;
+      vertical-align: middle;
+    }
+    #csvPane .csv-container .mapping-table tr:last-child td { border-bottom: none; }
+    #csvPane .csv-container .mapping-table tr:hover td { background: #faf9f7; }
+    #csvPane .csv-container .arrow-cell { color: #2563eb; font-size: 1rem; text-align: center; width: 36px; font-weight: 700; }
+    #csvPane .csv-container .field-label { color: #1a1a2e; font-weight: 700; }
+    #csvPane .csv-container .field-required { color: #2563eb; margin-left: 2px; font-weight: 800; }
+    #csvPane .csv-container .source-label { color: #4a4a68; font-weight: 500; }
+    #csvPane .csv-container .source-label.empty { color: #8888a0; font-style: italic; font-weight: 400; }
+    #csvPane .csv-container .status-bar {
+      margin-top: 18px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+    #csvPane .csv-container .status-bar.visible { display: flex; }
+    #csvPane .csv-container .status-bar.success { background: #d1fae5; border: 1px solid rgba(5,150,105,0.2); color: #059669; }
+    #csvPane .csv-container .status-bar.error { background: #fee2e2; border: 1px solid rgba(220,38,38,0.2); color: #dc2626; }
+    #csvPane .csv-container .status-bar.info { background: #dbeafe; border: 1px solid rgba(37,99,235,0.2); color: #2563eb; }
+    #csvPane .csv-container .preview-section { margin-top: 28px; display: none; }
+    #csvPane .csv-container .preview-section.visible { display: block; }
+    #csvPane .csv-container .preview-section h3 { font-size: 0.85rem; font-weight: 700; color: #4a4a68; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+    #csvPane .csv-container .preview-wrapper { overflow-x: auto; border: 1px solid #e2e0dc; border-radius: 10px; background: #ffffff; }
+    #csvPane .csv-container .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+    #csvPane .csv-container .preview-table th {
+      background: #f5f3ef;
+      padding: 12px 14px;
+      text-align: left;
+      font-weight: 700;
+      color: #2563eb;
+      border-bottom: 2px solid #e2e0dc;
+      position: sticky;
+      top: 0;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    #csvPane .csv-container .preview-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #e2e0dc;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+    #csvPane .csv-container .preview-table tr:last-child td { border-bottom: none; }
+    #csvPane .csv-container .preview-table tr:hover td { background: rgba(37,99,235,0.08); }
+    #csvPane .csv-container .empty-cell { color: #8888a0; font-weight: 400; font-style: italic; }
+    #csvPane .csv-container footer {
+      margin-top: 60px;
+      text-align: center;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: #8888a0;
+      opacity: 0;
+      animation: fadeUp 0.6s ease forwards;
+      animation-delay: 0.4s;
+    }
+    #csvPane .csv-container footer span { color: #2563eb; font-weight: 700; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 640px) {
+      #csvPane .csv-container .form-grid { grid-template-columns: 1fr; }
+      #csvPane .csv-container .drop-zone { padding: 40px 18px; }
+      #csvPane .csv-container .file-info { flex-direction: column; align-items: flex-start; }
+      #csvPane .csv-container .mapping-table { font-size: 0.72rem; }
+    }
+
+    /* ===== Componentes reutilizables (Procesar Conteo / Categorización) ===== */
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    @media (max-width: 900px) { .upload-grid { grid-template-columns: 1fr; } }
+    .dropzone {
+      border: 2px dashed #2d3348;
+      border-radius: 16px;
+      padding: 1.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: #38bdf8; background: rgba(56,189,248,0.06); }
+    .dropzone .dz-icon { font-size: 2rem; display: block; margin-bottom: 0.4rem; }
+    .dropzone input[type="file"] { display: none; }
+    .dropzone .dz-title { font-weight: 600; font-size: 0.85rem; }
+    .dropzone .dz-sub { font-size: 0.72rem; color: #757b95; margin-top: 2px; }
+    .file-pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+    .file-pill.waiting { background: #2d3348; color: #9ca3af; }
+    .file-pill.loaded { background: rgba(74,222,128,0.2); color: #4ade80; }
+    .file-pill.error { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+    .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 0.9rem; }
+    .field-item label { display: block; font-size: 0.7rem; font-weight: 600; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+    .field-item .hint { font-size: 0.68rem; color: #6b7280; margin-top: 3px; }
+    .collapsible-toggle {
+      display: flex; align-items: center; gap: 8px;
+      background: #1e2538; border: 1px solid #2d3348; border-radius: 12px;
+      padding: 0.6rem 1rem; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+      color: #38bdf8; width: 100%; text-align: left;
+    }
+    .collapsible-toggle .chev { transition: transform .25s; display: inline-block; }
+    .collapsible-toggle.open .chev { transform: rotate(180deg); }
+    .collapsible-content { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+    .collapsible-content.open { max-height: 700px; margin-top: 0.8rem; }
+    .row-match td { background: rgba(74,222,128,0.08); }
+    .row-unmatch td { background: rgba(255,107,107,0.08); }
+    .category-group-row td { background: rgba(56,189,248,0.08); font-weight: 700; color: #38bdf8; }
+    .spacer-row td { height: 8px; padding: 0; border: 0; }
+    .spinner-dark { border: 4px solid #2d3348; border-top: 4px solid #38bdf8; border-radius: 50%; width: 32px; height: 32px; animation: spin-dark 1s linear infinite; margin: 0 auto; }
+    @keyframes spin-dark { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <div class="top-bar">
+    <div class="logo-area"><div class="logo">MOODLE <span>→ CSV</span></div></div>
+    <div style="width: 80px;"></div>
+  </div>
+  <div class="main-layout">
+    <div class="content-area full-width" id="contentArea">
+      <div id="csvPane" class="active-pane">
+        <div class="csv-container">
+          <header style="margin-bottom:48px; opacity:0; animation:fadeUp 0.6s ease forwards;">
+            <div class="header-badge" style="display:inline-flex; align-items:center; gap:8px; background:#dbeafe; color:#2563eb; padding:6px 14px; border-radius:100px; font-size:0.75rem; font-weight:700; letter-spacing:0.04em; margin-bottom:18px; text-transform:uppercase;">
+              <span class="dot" style="width:7px; height:7px; background:#2563eb; border-radius:50%; display:inline-block; animation:pulse 2s ease infinite;"></span>
+              Herramienta activa
+            </div>
+            <h1 style="font-family:'DM Serif Display',serif; font-size:clamp(2.4rem,5.5vw,3.6rem); font-weight:400; line-height:1.1; color:#1a1a2e; margin-bottom:14px;">Moodle &rarr; <em style="color:#2563eb; font-style:normal; position:relative;">CSV</em></h1>
+            <p style="font-size:0.95rem; font-weight:500; color:#4a4a68; max-width:560px; line-height:1.65;">Selecciona tu plataforma, busca el curso por código, descarga los participantes y genera el archivo CSV listo para importar.</p>
+          </header>
+
+          <!-- STEP 1 -->
+          <div class="card" style="animation-delay:0.05s">
+            <div class="card-header">
+              <div class="card-step">1</div>
+              <div>
+                <div class="card-title">Buscar curso en Moodle</div>
+                <div class="card-subtitle">Selecciona la plataforma e ingresa el código del curso</div>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Plataforma</label>
+                <select id="platformSelect">
+                  <option value="https://presencial.aulasuniminuto.edu.co/course/search.php?areaids=core_course-course&q=">Presencial</option>
+                  <option value="https://distancia.aulasuniminuto.edu.co/course/search.php?areaids=core_course-course&q=">Distancia</option>
+                  <option value="https://posgrados.aulasuniminuto.edu.co/course/search.php?areaids=core_course-course&q=">Posgrados</option>
+                  <option value="https://cuatrimestral.aulasuniminuto.edu.co/course/search.php?areaids=core_course-course&q=">Cuatrimestral</option>
+                  <option value="https://moocs.aulasuniminuto.edu.co/course/search.php?areaids=core_course-course&q=">Educación Continua</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Código / ID</label>
+                <input type="text" id="courseId" placeholder="Ej: 47442" spellcheck="false">
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btnSearch">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              Buscar curso en Moodle
+            </button>
+            <div style="margin-top:18px">
+              <button class="steps-toggle" id="stepsToggle">
+                <span class="icon">&#9662;</span>
+                Ver pasos para descargar participantes
+              </button>
+              <div class="steps-content" id="stepsContent">
+                <ol class="steps-list">
+                  <li>Selecciona la <strong>plataforma</strong> en el menú desplegable.</li>
+                  <li>Escribe el <strong>código o ID</strong> del curso y haz clic en <strong>&ldquo;Buscar curso&rdquo;</strong>.</li>
+                  <li>En Moodle, dentro del curso, ve a la pestaña <strong>Participantes</strong>.</li>
+                  <li>Haz clic en <strong>&ldquo;Seleccionar todos&rdquo;</strong>.</li>
+                  <li>Al final, en <strong>&ldquo;Con los usuarios seleccionados&hellip;&rdquo;</strong> elige <strong>&ldquo;Descargar como Microsoft Excel (.xlsx)&rdquo;</strong>.</li>
+                  <li>Guarda el archivo y súbelo en el paso 2.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="divider">
+            <div class="divider-line"></div>
+            <span class="divider-text">Paso 2</span>
+            <div class="divider-line"></div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div class="card" style="animation-delay:0.15s">
+            <div class="card-header">
+              <div class="card-step" style="background:#059669">2</div>
+              <div>
+                <div class="card-title">Convertir archivo</div>
+                <div class="card-subtitle">Sube el .xlsx descargado y genera el CSV</div>
+              </div>
+            </div>
+            <div class="drop-zone" id="dropZone">
+              <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple>
+              <div class="drop-icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <h2>Arrastra tus archivos aquí</h2>
+              <span>o haz clic para seleccionar &mdash; puedes elegir varios .xlsx / .xls / .csv a la vez</span>
+            </div>
+
+            <div class="file-info" id="fileInfo" style="flex-direction:column; align-items:stretch;">
+              <div class="flex-between" style="width:100%;">
+                <div class="file-meta">
+                  <span class="file-badge" id="fileBadge">FILES</span>
+                  <div>
+                    <div class="file-name" id="fileName">0 archivos cargados</div>
+                    <div class="file-rows" id="fileRows">0 registros</div>
+                  </div>
+                </div>
+                <button class="file-remove" id="fileRemove" title="Quitar todos los archivos">&times;</button>
+              </div>
+              <div id="dedupNote" class="dedup-note" style="display:none;"></div>
+              <div id="fileListItems" style="display:flex; flex-direction:column; gap:8px; margin-top:4px;"></div>
+            </div>
+
+            <div class="mapping-section" id="mappingSection">
+              <h3>Mapping de columnas</h3>
+              <table class="mapping-table">
+                <thead><tr><th>CSV destino</th><th></th><th>Origen Excel</th></tr></thead>
+                <tbody id="mappingBody"></tbody>
+              </table>
+            </div>
+
+            <div style="margin-top:28px">
+              <button class="btn btn-primary btn-big" id="btnGenerate" disabled>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Generar y descargar CSV
+              </button>
+            </div>
+
+            <div class="status-bar" id="statusBar"></div>
+
+            <div class="preview-section" id="previewSection">
+              <h3>Vista previa (primeras 5 filas)</h3>
+              <div class="preview-wrapper">
+                <table class="preview-table">
+                  <thead id="previewHead"></thead>
+                  <tbody id="previewBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <footer>
+            CSV con codificación <span>UTF-8</span> delimitado por coma &mdash; Moodle participant export
+          </footer>
+
+          <!-- ENLACE COURSERA -->
+          <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e0dc; text-align: center; opacity: 0; animation: fadeUp 0.6s ease forwards; animation-delay: 0.5s;">
+            <a href="https://www.coursera.org/o/uniminuto/admin/programs" target="_blank" style="display: inline-flex; align-items: center; gap: 10px; background: #1a1a2e; color: #fff; padding: 12px 28px; border-radius: 40px; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(26,26,46,0.15);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              Coursera · Uniminuto
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+            <p style="font-size: 0.75rem; color: #8888a0; margin-top: 8px;">Acceso a administración de programas</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  (function() {
+      if (!document.getElementById('platformSelect')) return;
+
+      const CSV_HEADERS = [
+        'Email*','Full Name*','External Id','Manager Name','Manager Email',
+        'Job Title','Job Type','Business Unit','Business Unit 2',
+        'Location City','Location Country','Location Region'
+      ];
+      const MAPPING_INFO = [
+        { field: 'Email*',           source: 'D — Dirección de correo' },
+        { field: 'Full Name*',       source: 'A (Nombre) + B (Apellido)' },
+        { field: 'External Id',      source: '' },
+        { field: 'Manager Name',     source: '' },
+        { field: 'Manager Email',    source: '' },
+        { field: 'Job Title',        source: '' },
+        { field: 'Job Type',         source: '' },
+        { field: 'Business Unit',    source: '' },
+        { field: 'Business Unit 2',  source: '' },
+        { field: 'Location City',    source: '' },
+        { field: 'Location Country', source: '' },
+        { field: 'Location Region',  source: '' }
+      ];
+
+      let parsedData = [];
+
+      const platformSelect = document.getElementById('platformSelect');
+      const courseId       = document.getElementById('courseId');
+      const btnSearch      = document.getElementById('btnSearch');
+      const stepsToggle    = document.getElementById('stepsToggle');
+      const stepsContent   = document.getElementById('stepsContent');
+      const dropZone       = document.getElementById('dropZone');
+      const fileInput      = document.getElementById('fileInput');
+      const fileInfo       = document.getElementById('fileInfo');
+      const fileName       = document.getElementById('fileName');
+      const fileRows       = document.getElementById('fileRows');
+      const fileBadge      = document.getElementById('fileBadge');
+      const fileRemove     = document.getElementById('fileRemove');
+      const fileListItems  = document.getElementById('fileListItems');
+      const dedupNote      = document.getElementById('dedupNote');
+      const mappingBody    = document.getElementById('mappingBody');
+      const btnGenerate    = document.getElementById('btnGenerate');
+      const statusBar      = document.getElementById('statusBar');
+      const previewSection = document.getElementById('previewSection');
+      const previewHead    = document.getElementById('previewHead');
+      const previewBody    = document.getElementById('previewBody');
+
+      function buildMappingTable() {
+        mappingBody.innerHTML = '';
+        MAPPING_INFO.forEach(m => {
+          const tr = document.createElement('tr');
+          const label = m.field.includes('*')
+            ? m.field.replace('*', '<span class="field-required">*</span>')
+            : m.field;
+          tr.innerHTML = `
+            <td class="field-label">${label}</td>
+            <td class="arrow-cell">${m.source ? '→' : ''}</td>
+            <td class="source-label ${m.source ? '' : 'empty'}">${m.source || 'vacío'}</td>`;
+          mappingBody.appendChild(tr);
+        });
+      }
+      buildMappingTable();
+
+      stepsToggle.addEventListener('click', () => {
+        stepsToggle.classList.toggle('open');
+        stepsContent.classList.toggle('open');
+      });
+
+      btnSearch.addEventListener('click', () => {
+        const baseUrl = platformSelect.value;
+        const code    = courseId.value.trim();
+        if (!code) { showStatus('Ingresa el código o ID del curso.', 'error'); return; }
+        const name = platformSelect.options[platformSelect.selectedIndex].text;
+        window.open(baseUrl + encodeURIComponent(code), '_blank');
+        showStatus(`Abriendo curso "${code}" en ${name}...`, 'info');
+      });
+
+      courseId.addEventListener('keydown', e => { if (e.key === 'Enter') btnSearch.click(); });
+
+      dropZone.addEventListener('click', () => fileInput.click());
+      dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+      dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+      dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files); });
+      fileInput.addEventListener('change', e => { if (e.target.files.length) processFiles(e.target.files); fileInput.value = ''; });
+      fileRemove.addEventListener('click', resetAll);
+
+      const EMAIL_HEADERS = ['email','correo','email address','correo electrónico','correo electronico','dirección de correo','direccion de correo','e-mail'];
+      const FIRST_HEADERS = ['nombre','name','first name','firstname','nombres','given name'];
+      const LAST_HEADERS  = ['apellido','apellidos','last name','lastname','surname','surnames','family name'];
+      const ID_HEADERS    = ['número de id','numero de id','id number','id_number','document','documento','number of id','número de documento'];
+
+      function findColIndex(headers, candidates) {
+        const lower = headers.map(h => String(h).toLowerCase().trim());
+        for (const c of candidates) { const idx = lower.indexOf(c); if (idx !== -1) return idx; }
+        return -1;
+      }
+
+      // Cada archivo cargado se guarda aquí: { id, name, ext, records: [...] }
+      let loadedFiles = [];
+      let fileIdSeq = 0;
+
+      function readWorkbookRows(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            try {
+              const data = new Uint8Array(e.target.result);
+              const workbook = XLSX.read(data, { type: 'array' });
+              const sheet = workbook.Sheets[workbook.SheetNames[0]];
+              const json  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+              resolve(json);
+            } catch (err) { reject(err); }
+          };
+          reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+          reader.readAsArrayBuffer(file);
+        });
+      }
+
+      function parseRowsToRecords(json) {
+        if (json.length < 2) return { records: [], mapping: null };
+
+        const headers = json[0].map(h => String(h).trim());
+        let colEmail = findColIndex(headers, EMAIL_HEADERS);
+        let colFirst = findColIndex(headers, FIRST_HEADERS);
+        let colLast  = findColIndex(headers, LAST_HEADERS);
+        let colId    = findColIndex(headers, ID_HEADERS);
+
+        if (colFirst === -1) colFirst = 0;
+        if (colLast  === -1) colLast  = 1;
+        if (colId    === -1) colId    = 2;
+        if (colEmail === -1) colEmail = 3;
+
+        const mapping = {
+          detFirst: headers[colFirst] || `Col ${colFirst + 1}`,
+          detLast:  headers[colLast]  || `Col ${colLast + 1}`,
+          detEmail: headers[colEmail] || `Col ${colEmail + 1}`,
+          colEmail, colFirst, colLast
+        };
+
+        const records = [];
+        for (let i = 1; i < json.length; i++) {
+          const row      = json[i];
+          const nombre   = String(row[colFirst] || '').trim();
+          const apellido = String(row[colLast]  || '').trim();
+          const id       = String(row[colId]    || '').trim();
+          const email    = String(row[colEmail] || '').trim();
+          if (!nombre && !apellido && !email) continue;
+          records.push({ email, fullName: (nombre + ' ' + apellido).trim(), id });
+        }
+        return { records, mapping };
+      }
+
+      async function processFiles(fileList) {
+        const files = Array.from(fileList);
+        for (const file of files) {
+          const ext = file.name.split('.').pop().toUpperCase();
+          try {
+            const json = await readWorkbookRows(file);
+            const { records, mapping } = parseRowsToRecords(json);
+
+            if (!mapping) {
+              showStatus(`"${file.name}" no contiene suficientes filas y fue omitido.`, 'error');
+              continue;
+            }
+
+            MAPPING_INFO[0].source = `Col ${mapping.colEmail + 1} (${mapping.detEmail})`;
+            MAPPING_INFO[1].source = `Col ${mapping.colFirst + 1} (${mapping.detFirst}) + Col ${mapping.colLast + 1} (${mapping.detLast})`;
+            buildMappingTable();
+
+            loadedFiles.push({ id: ++fileIdSeq, name: file.name, ext, records });
+          } catch (err) {
+            showStatus(`Error al leer "${file.name}": ${err.message}`, 'error');
+          }
+        }
+        recompute();
+      }
+
+      function dedupeRecords(records) {
+        const seen = new Map();
+        const result = [];
+        let duplicates = 0;
+        records.forEach(r => {
+          const key = r.email
+            ? 'email:' + r.email.toLowerCase()
+            : 'name:' + r.fullName.toLowerCase() + '|' + r.id.toLowerCase();
+          if (seen.has(key)) {
+            duplicates++;
+          } else {
+            seen.set(key, true);
+            result.push(r);
+          }
+        });
+        return { result, duplicates };
+      }
+
+      function recompute() {
+        // Reconstruye la lista de archivos en pantalla
+        fileListItems.innerHTML = loadedFiles.map(f => `
+          <div class="file-list-item">
+            <div class="file-meta-sm">
+              <span class="file-badge" style="font-size:0.6rem; padding:4px 8px;">${f.ext}</span>
+              <div>
+                <div class="file-name-sm">${f.name}</div>
+                <div class="file-rows-sm">${f.records.length} registro${f.records.length !== 1 ? 's' : ''}</div>
+              </div>
+            </div>
+            <button class="file-remove-sm" data-file-id="${f.id}" title="Quitar este archivo">&times;</button>
+          </div>`).join('');
+
+        fileListItems.querySelectorAll('.file-remove-sm').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = Number(btn.getAttribute('data-file-id'));
+            loadedFiles = loadedFiles.filter(f => f.id !== id);
+            recompute();
+          });
+        });
+
+        const allRecords = loadedFiles.flatMap(f => f.records);
+        const { result, duplicates } = dedupeRecords(allRecords);
+        parsedData = result;
+
+        if (loadedFiles.length > 0) {
+          fileInfo.classList.add('visible');
+          fileName.textContent = `${loadedFiles.length} archivo${loadedFiles.length !== 1 ? 's' : ''} cargado${loadedFiles.length !== 1 ? 's' : ''}`;
+          fileRows.textContent = `${parsedData.length} registro${parsedData.length !== 1 ? 's' : ''} único${parsedData.length !== 1 ? 's' : ''} de ${allRecords.length} en total`;
+        } else {
+          fileInfo.classList.remove('visible');
+          fileName.textContent = '0 archivos cargados';
+          fileRows.textContent = '0 registros';
+        }
+
+        if (duplicates > 0) {
+          dedupNote.style.display = 'block';
+          dedupNote.textContent = `Se detectaron y eliminaron ${duplicates} registro${duplicates !== 1 ? 's' : ''} duplicado${duplicates !== 1 ? 's' : ''} (mismo correo, o mismo nombre + ID si no había correo).`;
+        } else {
+          dedupNote.style.display = 'none';
+        }
+
+        btnGenerate.disabled = parsedData.length === 0;
+        previewSection.classList.remove('visible');
+        hideStatus();
+
+        if (loadedFiles.length > 0) {
+          showStatus(
+            parsedData.length > 0
+              ? `${parsedData.length} registros únicos listos para generar el CSV.`
+              : 'Los archivos cargados no contienen datos válidos.',
+            parsedData.length > 0 ? 'success' : 'error'
+          );
+        }
+      }
+
+      btnGenerate.addEventListener('click', () => {
+        if (parsedData.length === 0) return;
+
+        const csvRows = [CSV_HEADERS.join(',')];
+        parsedData.forEach(r => {
+          csvRows.push([esc(r.email), esc(r.fullName), '','','','','','','','','',''].join(','));
+        });
+
+        const bom  = '\uFEFF';
+        const blob = new Blob([bom + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = 'participantes.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showStatus(`CSV descargado con ${parsedData.length} registros únicos (de ${loadedFiles.length} archivo${loadedFiles.length !== 1 ? 's' : ''}). External Id vacío.`, 'success');
+        showPreview();
+      });
+
+      function esc(v) {
+        if (!v) return '';
+        const s = String(v);
+        if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r'))
+          return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      }
+
+      function showPreview() {
+        previewSection.classList.add('visible');
+        previewSection.style.opacity = 0;
+        requestAnimationFrame(() => { previewSection.style.transition = 'opacity 0.5s ease'; previewSection.style.opacity = 1; });
+
+        previewHead.innerHTML = '<tr>' + CSV_HEADERS.map(h => `<th>${h}</th>`).join('') + '</tr>';
+        previewBody.innerHTML = parsedData.slice(0, 5).map(r => `
+          <tr>
+            <td>${r.email || '<span class="empty-cell">vacío</span>'}</td>
+            <td>${r.fullName || '<span class="empty-cell">vacío</span>'}</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+            <td class="empty-cell">vacío</td>
+          </tr>`).join('');
+      }
+
+      function showStatus(msg, type) { statusBar.textContent = msg; statusBar.className = 'status-bar visible ' + type; }
+      function hideStatus() { statusBar.className = 'status-bar'; }
+
+      function resetAll() {
+        loadedFiles = [];
+        parsedData = [];
+        fileInput.value = '';
+        fileInfo.classList.remove('visible');
+        fileListItems.innerHTML = '';
+        dedupNote.style.display = 'none';
+        previewSection.classList.remove('visible');
+        btnGenerate.disabled = true;
+        hideStatus();
+      }
+  })();
+</script>
+</body>
+</html>
